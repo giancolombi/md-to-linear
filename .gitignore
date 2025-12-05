@@ -1,10 +1,18 @@
 # Dependencies
 node_modules/
 
-# Environment variables (contains secrets)
+# Next.js
+.next/
+out/
+
+# Environment variables
 .env
 .env.local
 .env.*.local
+
+# Build outputs
+dist/
+build/
 
 # OS files
 .DS_Store
@@ -14,16 +22,12 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Next.js
-.next/
-out/
-
-# Build outputs
-dist/
-build/
-
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

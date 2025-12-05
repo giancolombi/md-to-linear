@@ -18,8 +18,19 @@ export async function POST(request: NextRequest) {
     
     console.log('Parsed projects:', JSON.stringify(projects, null, 2));
     
-    const results = [];
-    const errors = [];
+    const results: Array<{
+      type: string;
+      title: string;
+      id: string;
+      url: string;
+      tasks: Array<{
+        title: string;
+        identifier: string;
+        url: string;
+        subtasks: Array<{ title: string; identifier: string; url: string }>;
+      }>;
+    }> = [];
+    const errors: Array<{ level: string; task: string; error: string }> = [];
     let totalTasks = 0;
     let totalSubtasks = 0;
     
@@ -32,24 +43,30 @@ export async function POST(request: NextRequest) {
           description: project.description || undefined,
         });
         
-        // The SDK returns _project with just the ID
-        if (!projectResult.success || !projectResult._project) {
+        if (!projectResult.success) {
           console.error('Project creation failed:', projectResult);
           throw new Error('Failed to create project');
         }
         
-        const projectId = (projectResult as any)._project.id;
-        console.log('Created project with ID:', projectId);
+        // Get the created project
+        const createdProject = await projectResult.project;
+        if (!createdProject) {
+          throw new Error('Failed to get created project');
+        }
         
-        // Fetch the full project details to get the URL
-        const fullProject = await client.project(projectId);
+        console.log('Created project with ID:', createdProject.id);
         
         const projectData = {
           type: 'project',
           title: project.title,
-          id: projectId,
-          url: fullProject.url,
-          tasks: [] as any[]
+          id: createdProject.id,
+          url: createdProject.url,
+          tasks: [] as Array<{
+            title: string;
+            identifier: string;
+            url: string;
+            subtasks: Array<{ title: string; identifier: string; url: string }>;
+          }>
         };
         
         // Small delay to ensure project is fully created
@@ -58,86 +75,90 @@ export async function POST(request: NextRequest) {
         for (const task of project.tasks) {
           totalTasks++;
           try {
-            console.log('Creating task:', task.title, 'in project:', projectId);
+            console.log('Creating task:', task.title, 'in project:', createdProject.id);
             const parentIssueResult = await client.createIssue({
               teamId,
-              projectId: projectId,
+              projectId: createdProject.id,
               title: task.title,
               description: task.description || undefined,
             });
             
-            // The SDK returns _issue with just the ID
-            if (!parentIssueResult.success || !(parentIssueResult as any)._issue) {
+            if (!parentIssueResult.success) {
               console.error('Issue creation failed:', parentIssueResult);
               throw new Error(`Failed to create issue ${task.title}`);
             }
             
-            const parentIssueId = (parentIssueResult as any)._issue.id;
-            console.log('Created task with ID:', parentIssueId);
+            const parentIssue = await parentIssueResult.issue;
+            if (!parentIssue) {
+              throw new Error('Failed to get created issue');
+            }
             
-            // Fetch the full issue details
-            const parentIssue = await client.issue(parentIssueId);
+            console.log('Created task with ID:', parentIssue.id);
             
             const taskResult = {
               title: task.title,
               identifier: parentIssue.identifier,
               url: parentIssue.url,
-              subtasks: [] as any[]
+              subtasks: [] as Array<{ title: string; identifier: string; url: string }>
             };
             
             for (const subtask of task.subtasks) {
               totalSubtasks++;
               try {
-                console.log('Creating subtask:', subtask.title, 'with parent:', parentIssueId);
+                console.log('Creating subtask:', subtask.title, 'with parent:', parentIssue.id);
                 const subIssueResult = await client.createIssue({
                   teamId,
-                  projectId: projectId,
+                  projectId: createdProject.id,
                   title: subtask.title,
                   description: subtask.description || undefined,
-                  parentId: parentIssueId
+                  parentId: parentIssue.id
                 });
                 
-                if (!subIssueResult.success || !(subIssueResult as any)._issue) {
+                if (!subIssueResult.success) {
                   console.error('Sub-issue creation failed:', subIssueResult);
                   throw new Error(`Failed to create sub-issue ${subtask.title}`);
                 }
                 
-                const subIssueId = (subIssueResult as any)._issue.id;
-                console.log('Created subtask with ID:', subIssueId);
+                const subIssue = await subIssueResult.issue;
+                if (!subIssue) {
+                  throw new Error('Failed to get created sub-issue');
+                }
                 
-                // Fetch the full sub-issue details
-                const subIssue = await client.issue(subIssueId);
+                console.log('Created subtask with ID:', subIssue.id);
                 
                 taskResult.subtasks.push({
                   title: subtask.title,
                   identifier: subIssue.identifier,
                   url: subIssue.url
                 });
-              } catch (error: any) {
+              } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 errors.push({
                   level: 'subtask',
                   task: subtask.title,
-                  error: error.message
+                  error: errorMessage
                 });
               }
             }
             
             projectData.tasks.push(taskResult);
-          } catch (error: any) {
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             errors.push({
               level: 'task',
               task: task.title,
-              error: error.message
+              error: errorMessage
             });
           }
         }
         
         results.push(projectData);
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         errors.push({
           level: 'project',
           task: project.title,
-          error: error.message
+          error: errorMessage
         });
       }
     }
@@ -155,9 +176,10 @@ export async function POST(request: NextRequest) {
       }
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: error.message },
+      { error: errorMessage },
       { status: 500 }
     );
   }
