@@ -1,0 +1,19 @@
+{
+  "name": "md-to-linear",
+  "version": "1.0.0",
+  "description": "Convert markdown tasks to Linear issues",
+  "main": "index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@linear/sdk": "^13.0.0",
+    "marked": "^14.1.0",
+    "dotenv": "^16.4.5",
+    "chalk": "^5.3.0"
+  }
+}
